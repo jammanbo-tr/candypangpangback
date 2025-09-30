@@ -1448,6 +1448,49 @@ const TeacherPage = () => {
     }
   };
 
+  // 경험치 초과 문제 수정 함수
+  const handleFixExpOverflow = async () => {
+    if (!window.confirm('경험치가 초과된 학생들의 레벨을 자동 조정합니다. 진행할까요?')) return;
+    if (!studentsSnapshot) return;
+    
+    let fixedCount = 0;
+    for (const docSnap of studentsSnapshot.docs) {
+      const student = docSnap.data();
+      let exp = typeof student.exp === 'number' && !isNaN(student.exp) ? student.exp : 0;
+      let level = typeof student.level === 'number' && !isNaN(student.level) ? student.level : 0;
+      let required = getRequiredExp(level);
+      let hasChanged = false;
+      
+      // 경험치가 초과된 경우 레벨업 처리
+      while (exp >= required) {
+        exp -= required;
+        level += 1;
+        required = getRequiredExp(level);
+        hasChanged = true;
+      }
+      
+      // 변경사항이 있는 경우 업데이트
+      if (hasChanged) {
+        const studentRef = doc(db, 'students', docSnap.id);
+        await updateDoc(studentRef, {
+          exp: exp,
+          level: level,
+          expEvents: arrayUnion({
+            type: 'levelUp',
+            amount: 0,
+            ts: Date.now(),
+            text: '경험치 초과 자동 레벨업',
+            result: 'auto-fix'
+          })
+        });
+        fixedCount++;
+        console.log(`${student.name}: 레벨 ${level - Math.floor((student.exp - exp) / required)} → ${level}, 경험치 ${student.exp} → ${exp}`);
+      }
+    }
+    
+    alert(`${fixedCount}명의 학생 레벨이 수정되었습니다.`);
+  };
+
   // 레벨업 이력 마이그레이션 함수 (1개씩 안전하게 추가)
   const handleLevelUpMigration = async () => {
     if (!window.confirm('모든 학생의 과거 레벨업 이력을 분석해 levelUp 이벤트를 추가합니다. 진행할까요?')) return;
@@ -2015,6 +2058,23 @@ const TeacherPage = () => {
             <BarChartIcon style={{ fontSize: 20 }} />
             링크 통계
           </button>
+          <button
+            onClick={handleFixExpOverflow}
+            style={{
+              background: '#f3e5f5',
+              border: '2px solid #9c27b0',
+              color: '#7b1fa2',
+              fontWeight: 'bold',
+              borderRadius: 12,
+              boxShadow: '0 2px 8px #ce93d830',
+              padding: '8px 18px',
+              fontSize: 14,
+              minWidth: 70,
+              transition: 'all 0.2s',
+              cursor: 'pointer',
+              opacity: 1
+            }}
+          >경험치 수정</button>
         </div>
         {alertMsg && (
           <div style={{position:'fixed',top:24,left:'50%',transform:'translateX(-50%)',background:'#ffebee',color:'#c62828',padding:'12px 32px',borderRadius:12,fontWeight:600,fontSize:16,zIndex:9999,boxShadow:'0 2px 8px #c6282820'}}
